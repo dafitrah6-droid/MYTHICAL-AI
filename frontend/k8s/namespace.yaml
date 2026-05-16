@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mythical-prod
+  labels:
+    environment: production
+    system: mythical-ai
