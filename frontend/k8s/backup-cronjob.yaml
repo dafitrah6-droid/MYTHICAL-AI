@@ -1,0 +1,59 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mythical-db-backup
+  namespace: mythical-prod
+spec:
+  schedule: "0 3 * * *" # Run at 3:00 AM every day
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 1
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          containers:
+          - name: backup-worker
+            image: amazon/aws-cli:latest
+            command:
+            - /bin/sh
+            - -c
+            - |
+              echo "Starting database backup..."
+              yum install -y postgresql-client gzip
+              TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+              BACKUP_FILE="/tmp/mythical_backup_${TIMESTAMP}.sql.gz"
+              
+              # Dump and compress
+              pg_dump $DATABASE_URL | gzip > $BACKUP_FILE
+              
+              if [ $? -eq 0 ]; then
+                echo "Backup successful, uploading to S3..."
+                aws s3 cp $BACKUP_FILE s3://$BACKUP_BUCKET_NAME/database/
+                echo "Upload complete."
+              else
+                echo "Backup failed!"
+                exit 1
+              fi
+            env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: mythical-ai-secrets
+                  key: DATABASE_URL
+            - name: BACKUP_BUCKET_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: mythical-ai-config
+                  key: BACKUP_BUCKET_NAME
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: mythical-ai-secrets
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: mythical-ai-secrets
+                  key: AWS_SECRET_ACCESS_KEY
