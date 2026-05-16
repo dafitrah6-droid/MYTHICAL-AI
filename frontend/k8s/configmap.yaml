@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mythical-ai-config
+  namespace: mythical-prod
+data:
+  NODE_ENV: "production"
+  PORT: "3000"
+  BACKUP_BUCKET_NAME: "mythical-ai-prod-backups"
+  LOG_LEVEL: "info"
