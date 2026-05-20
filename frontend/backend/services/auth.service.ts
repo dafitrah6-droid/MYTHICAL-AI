@@ -1,8 +1,39 @@
 import { pool, redisClient } from '../db';
-import { DbSession } from '../types';
+import { DbSession, DbUser } from '../types';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 
 export class AuthService {
+  /**
+   * Authenticates a user with email and password, returns session token if valid.
+   */
+  static async authenticateUser(email: string, password: string): Promise<string> {
+    if (!email || typeof email !== 'string') {
+      throw new Error('Validation Error: Invalid email');
+    }
+    if (!password || typeof password !== 'string') {
+      throw new Error('Validation Error: Invalid password');
+    }
+
+    const result = await pool.query<DbUser>(
+      'SELECT id, password_hash FROM users WHERE email = $1',
+      [email]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Authentication Error: Invalid email or password');
+    }
+
+    const user = result.rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+
+    if (!isPasswordValid) {
+      throw new Error('Authentication Error: Invalid email or password');
+    }
+
+    return this.createSession(user.id);
+  }
+
   /**
    * Creates a new session for a user, persisting it in PostgreSQL and caching in Redis.
    */

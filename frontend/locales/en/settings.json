@@ -1,0 +1,50 @@
+{
+  "title": "Settings",
+  "tabs": {
+    "general": "General",
+    "profile": "Profile",
+    "privacy": "Privacy",
+    "notifications": "Notifications",
+    "appearance": "Appearance",
+    "advanced": "Advanced"
+  },
+  "general": {
+    "language": "Language",
+    "theme": "Theme",
+    "autoSave": "Auto-save",
+    "notifications": "Enable Notifications"
+  },
+  "profile": {
+    "name": "Full Name",
+    "email": "Email Address",
+    "avatar": "Avatar",
+    "bio": "Bio",
+    "changePassword": "Change Password"
+  },
+  "privacy": {
+    "dataCollection": "Data Collection",
+    "shareActivity": "Share Activity",
+    "profileVisibility": "Profile Visibility",
+    "exportData": "Export My Data",
+    "deleteAccount": "Delete Account"
+  },
+  "appearance": {
+    "theme": "Theme",
+    "darkMode": "Dark Mode",
+    "lightMode": "Light Mode",
+    "autoMode": "Auto"
+  },
+  "buttons": {
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "deleteAccount": "Delete Account",
+    "exportData": "Export Data"
+  },
+  "errors": {
+    "saveFailed": "Failed to save settings",
+    "invalidInput": "Invalid input"
+  },
+  "messages": {
+    "settingsSaved": "Settings saved successfully"
+  }
+}

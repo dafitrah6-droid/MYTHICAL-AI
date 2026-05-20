@@ -1,5 +1,6 @@
 import { Type, FunctionDeclaration } from '@google/genai';
 import { ToolContext, ToolPermission } from '../types';
+import { SsrfPrevention } from '../security/ssrf-prevention';
 
 export interface ToolDefinition {
   declaration: FunctionDeclaration;
@@ -118,15 +119,17 @@ ToolRegistry.register('apiRequest', {
   validateInput: (args: any) => {
     if (!['GET', 'POST', 'PUT', 'DELETE'].includes(args.method.toUpperCase())) return false;
     try {
-      const url = new URL(args.url);
-      // Reject internal network requests
-      if (url.hostname === 'localhost' || url.hostname.startsWith('127.') || url.hostname.startsWith('10.')) return false;
+      new URL(args.url);
       return true;
     } catch {
       return false;
     }
   },
   execute: async (args, context) => {
+    const isSafe = await SsrfPrevention.isSafeUrl(args.url);
+    if (!isSafe) {
+      throw new Error('Security Error: Target URL is not accessible (internal network or reserved IP)');
+    }
     // Architectural stub for API requests
     return { status: 200, data: `Mock response from ${args.url}` };
   }

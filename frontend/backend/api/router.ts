@@ -19,18 +19,25 @@ router.use(SecurityMiddleware.rateLimiter(100, 60));
 
 // Stricter rate limit for auth endpoints (10 requests per minute)
 router.post('/auth/session', SecurityMiddleware.rateLimiter(10, 60), async (req: Request, res: Response) => {
-  const { userId } = req.body;
-  
-  if (!userId || typeof userId !== 'string') {
-    return res.status(400).json({ error: 'Bad Request: Invalid userId parameter' });
+  const { email, password } = req.body;
+
+  if (!email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: Invalid email parameter' });
   }
-  
+  if (!password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: Invalid password parameter' });
+  }
+
   try {
-    const token = await AuthService.createSession(userId);
-    await EventTracker.trackUserActivity(userId, 'login_success');
+    const token = await AuthService.authenticateUser(email, password);
+    // Extract userId from validated session for logging
+    const userId = await AuthService.validateSession(token);
+    if (userId) {
+      await EventTracker.trackUserActivity(userId, 'login_success');
+    }
     res.status(201).json({ token });
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    res.status(401).json({ error: error.message });
   }
 });
 

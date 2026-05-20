@@ -1,0 +1,38 @@
+{
+  "title": "Memories",
+  "addMemory": "Add Memory",
+  "editMemory": "Edit Memory",
+  "deleteMemory": "Delete Memory",
+  "category": "Category",
+  "content": "Content",
+  "createdAt": "Created At",
+  "updatedAt": "Updated At",
+  "noMemories": "No memories yet. Start creating!",
+  "categories": {
+    "personal": "Personal",
+    "professional": "Professional",
+    "learning": "Learning",
+    "projects": "Projects",
+    "goals": "Goals",
+    "notes": "Notes"
+  },
+  "buttons": {
+    "add": "Add Memory",
+    "edit": "Edit",
+    "delete": "Delete",
+    "save": "Save",
+    "cancel": "Cancel"
+  },
+  "messages": {
+    "memoryAdded": "Memory added successfully",
+    "memoryUpdated": "Memory updated successfully",
+    "memoryDeleted": "Memory deleted successfully",
+    "confirmDelete": "Are you sure you want to delete this memory?"
+  },
+  "errors": {
+    "failedToAdd": "Failed to add memory",
+    "failedToUpdate": "Failed to update memory",
+    "failedToDelete": "Failed to delete memory",
+    "emptyContent": "Content cannot be empty"
+  }
+}

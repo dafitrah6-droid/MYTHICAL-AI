@@ -1,0 +1,39 @@
+{
+  "title": "Mythical AI Chat",
+  "placeholder": "Message Mythical...",
+  "inputPlaceholder": "Type your message here",
+  "sendMessage": "Send",
+  "uploadFile": "Upload File",
+  "attachFile": "Attach File",
+  "newConversation": "New Conversation",
+  "noMessages": "No messages yet. Start a conversation!",
+  "processing": "Mythical is processing...",
+  "thinking": "Thinking...",
+  "analyzing": "Analyzing...",
+  "generating": "Generating response...",
+  "buttons": {
+    "planTask": "Plan Task",
+    "deepReason": "Deep Reason",
+    "summarize": "Summarize",
+    "refine": "Refine"
+  },
+  "status": {
+    "typing": "typing...",
+    "online": "Online",
+    "offline": "Offline",
+    "awaiting": "Awaiting response"
+  },
+  "errors": {
+    "messageTooLong": "Message is too long",
+    "emptyMessage": "Message cannot be empty",
+    "failedToSend": "Failed to send message",
+    "failedToUpload": "Failed to upload file",
+    "invalidFileType": "Invalid file type"
+  },
+  "features": {
+    "fileAnalysis": "File Analysis",
+    "webSearch": "Web Search",
+    "codeExecution": "Code Execution",
+    "memoryRecall": "Memory Recall"
+  }
+}
