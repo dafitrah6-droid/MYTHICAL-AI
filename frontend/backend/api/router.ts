@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ChatService } from '../services/chat.service';
 import { MemoryService } from '../services/memory.service';
+import { UserService } from '../services/user.service';
 import { SecurityMiddleware, AuthenticatedRequest } from '../security/middleware';
 import { AccessPolicies } from '../security/policies';
 import { ObservabilityMiddleware } from './middleware/observability';
@@ -39,6 +40,74 @@ router.delete('/auth/session', SecurityMiddleware.requireAuth, async (req: Authe
   try {
     await AuthService.revokeSession(token);
     await EventTracker.trackUserActivity(req.securityContext!.userId, 'logout');
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/user/profile', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const profile = await UserService.getUserProfile(req.securityContext!.userId);
+    res.json(profile);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/user/profile', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const { name, email } = req.body;
+  if (!name || typeof name !== 'string' || !email || typeof email !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: Invalid profile fields' });
+  }
+
+  try {
+    const profile = await UserService.updateUserProfile(req.securityContext!.userId, name.trim(), email.trim());
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'update_profile');
+    res.json(profile);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/user/api-keys', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const apiKeys = await UserService.getUserApiKeys(req.securityContext!.userId);
+    res.json(apiKeys);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/user/api-keys', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const apiKey = await UserService.createApiKey(req.securityContext!.userId);
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'create_api_key');
+    res.status(201).json(apiKey);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/user/api-keys/:id', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  const keyId = req.params.id;
+  if (!keyId || typeof keyId !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: Invalid API key id' });
+  }
+
+  try {
+    await UserService.revokeApiKey(req.securityContext!.userId, keyId);
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'revoke_api_key');
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/user/account', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await UserService.deleteAccount(req.securityContext!.userId);
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'delete_account');
     res.status(204).send();
   } catch (error: any) {
     res.status(400).json({ error: error.message });

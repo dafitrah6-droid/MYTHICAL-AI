@@ -11,11 +11,40 @@ import fetch from 'node-fetch';
 import rateLimit from 'express-rate-limit';
 import { WebSocketServer, WebSocket } from 'ws';
 
+const API_PAYLOAD_MAX_SIZE = process?.env?.API_PAYLOAD_MAX_SIZE || '2mb';
+const ALLOWED_ORIGINS = (process?.env?.CORS_ALLOWED_ORIGINS || 'http://localhost:5173,http://localhost:3000')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const app = express();
-app.use(express.json({limit: process?.env?.API_PAYLOAD_MAX_SIZE || "7mb"}));
+
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'no-referrer');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+
+  const origin = req.headers.origin;
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,X-App-Proxy');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+  }
+
+  if (req.method === 'OPTIONS') {
+    return res.sendStatus(204);
+  }
+
+  next();
+});
+
+app.use(express.json({ limit: API_PAYLOAD_MAX_SIZE }));
 
 const PORT = process?.env?.API_BACKEND_PORT || 5000;
-const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || "127.0.0.1";
+const API_BACKEND_HOST = process?.env?.API_BACKEND_HOST || '127.0.0.1';
 
 const GOOGLE_CLOUD_LOCATION = process?.env?.GOOGLE_CLOUD_LOCATION;
 const GOOGLE_CLOUD_PROJECT = process?.env?.GOOGLE_CLOUD_PROJECT;
@@ -311,7 +340,7 @@ app.post('/api-proxy', async (req, res) => {
 });
 
 const server = app.listen(PORT, API_BACKEND_HOST, () => {
-  console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);
+  console.log(`Vertex AI Backend listening at http://${API_BACKEND_HOST}:${PORT}`);
 });
 
 

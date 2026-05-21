@@ -1,168 +1,105 @@
-import { GoogleGenAI, Type } from '@google/genai';
 import { Message, MemoryItem, Task, FileAttachment } from '../types';
 
-// Initialize the SDK. Assumes process.env.API_KEY is available in the environment.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY, vertexai: true });
+export type StreamCallback = (partialText: string) => void;
+
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const streamText = async (text: string, onChunk: StreamCallback) => {
+  if (typeof onChunk !== 'function') return;
+
+  const tokens = text.split(/(\s+)/);
+  let buffer = '';
+
+  for (const token of tokens) {
+    buffer += token;
+    onChunk(buffer);
+    await delay(20);
+  }
+};
 
 /**
  * Core Chat Processing with Memory and File Understanding
  */
+const postJson = async <T>(endpoint: string, payload: unknown): Promise<T | null> => {
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+};
+
 export const processChat = async (
   currentMessage: string,
   history: Message[],
   memories: MemoryItem[],
-  files: FileAttachment[]
+  files: FileAttachment[],
+  onChunk?: StreamCallback
 ): Promise<string | null> => {
-  // Parameter validation
-  if (!currentMessage || typeof currentMessage !== 'string') return null;
-  if (!Array.isArray(history)) return null;
-  if (!Array.isArray(memories)) return null;
-  if (!Array.isArray(files)) return null;
+  const fallbackResponse = `Mythical received your message: ${currentMessage}`;
+  const resultText = await postJson<{ text: string }>('/api/ai/process', {
+    currentMessage,
+    history,
+    memories,
+    files,
+  }).then((result) => result?.text ?? fallbackResponse).catch(() => fallbackResponse);
 
-  // Construct system instruction from memories
-  const memoryContext = memories.length > 0 
-    ? `User Context/Memories:\n${memories.map(m => `- [${m.category}] ${m.content}`).join('\n')}`
-    : 'No specific user context available.';
-
-  const systemInstruction = `You are MYTHICAL AI, a premium, minimalist intelligence interface. 
-Be concise, highly accurate, and maintain a sophisticated tone.
-${memoryContext}`;
-
-  // Prepare contents array
-  const contents = [];
-
-  // Add history (simplified for architecture flow)
-  for (const msg of history.slice(-5)) { // Keep last 5 for context
-    contents.push({
-      role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }]
-    });
+  if (onChunk) {
+    await streamText(resultText, onChunk);
   }
 
-  // Prepare current message parts (text + files)
-  const currentParts: any[] = [];
-  
-  // File understanding flow
-  for (const file of files) {
-    if (file.base64Data && file.type) {
-      currentParts.push({
-        inlineData: {
-          data: file.base64Data,
-          mimeType: file.type
-        }
-      });
-    }
-  }
-  
-  currentParts.push({ text: currentMessage });
-
-  contents.push({
-    role: 'user',
-    parts: currentParts
-  });
-
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: contents,
-    config: {
-      systemInstruction: systemInstruction,
-      temperature: 0.7,
-    }
-  });
-
-  return response.text;
+  return resultText;
 };
 
 /**
  * Conversation Memory Extraction Engine
  */
 export const extractMemories = async (text: string): Promise<Omit<MemoryItem, 'id' | 'createdAt'>[] | null> => {
-  // Parameter validation
   if (!text || typeof text !== 'string') return null;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: `Analyze the following text and extract any persistent facts, preferences, or context about the user. If none exist, return an empty array.\n\nText: "${text}"`,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            category: {
-              type: Type.STRING,
-              description: 'The category of the memory (e.g., Preference, Fact, Project Context)',
-            },
-            content: {
-              type: Type.STRING,
-              description: 'The extracted memory content.',
-            },
-          },
-          required: ['category', 'content'],
-        },
-      },
-    },
-  });
+  const response = await postJson<Omit<MemoryItem, 'id' | 'createdAt'>[]>('/api/ai/memories', { text });
 
-  const jsonStr = response.text.trim();
-  const extracted = JSON.parse(jsonStr);
-  return extracted;
+  return response ?? [];
 };
 
 /**
  * Task Planning Engine
  */
 export const generateTaskPlan = async (objective: string): Promise<Omit<Task, 'id' | 'status'>[] | null> => {
-  // Parameter validation
   if (!objective || typeof objective !== 'string') return null;
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: `Break down the following objective into a logical sequence of actionable tasks.\n\nObjective: "${objective}"`,
-    config: {
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            title: {
-              type: Type.STRING,
-              description: 'A short, clear title for the task.',
-            },
-            description: {
-              type: Type.STRING,
-              description: 'A detailed description of what needs to be done.',
-            },
-          },
-          required: ['title', 'description'],
-        },
-      },
-    },
-  });
+  const response = await postJson<Omit<Task, 'id' | 'status'>[]>('/api/ai/plan', { objective });
 
-  const jsonStr = response.text.trim();
-  const tasks = JSON.parse(jsonStr);
-  return tasks;
+  return (
+    response ?? [
+      {
+        title: 'Review the objective',
+        description: `Clarify the task goal and break it into smaller steps for: ${objective}`,
+      },
+      {
+        title: 'Create an execution plan',
+        description: 'Define the next actions needed to make progress toward the expected outcome.',
+      },
+    ]
+  );
 };
 
 /**
  * Reasoning Engine (Thinking process simulation)
  */
 export const generateReasoning = async (query: string): Promise<string | null> => {
-  // Parameter validation
   if (!query || typeof query !== 'string') return null;
 
-  // Using thinkingConfig to simulate a reasoning engine flow
-  const response = await ai.models.generateContent({
-    model: 'gemini-2.5-flash',
-    contents: query,
-    config: {
-      maxOutputTokens: 1000,
-      thinkingConfig: { thinkingBudget: 500 },
-    },
-  });
+  const response = await postJson<{ text: string }>('/api/ai/reason', { query });
 
-  return response.text;
+  return response?.text ?? `I am unable to access the remote reasoning service right now. Here is a placeholder response for: ${query}`;
 };
