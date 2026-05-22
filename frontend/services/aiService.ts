@@ -2,18 +2,75 @@ import { Message, MemoryItem, Task, FileAttachment } from '../types';
 
 export type StreamCallback = (partialText: string) => void;
 
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/**
+ * Real-time streaming chat with Gemini, Claude, or GPT
+ */
+export const processStreamingChat = async (
+  currentMessage: string,
+  provider: 'gemini' | 'claude' | 'gpt' = 'gemini',
+  onChunk?: StreamCallback
+): Promise<string | null> => {
+  try {
+    // Get auth token from localStorage
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+    
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
 
-const streamText = async (text: string, onChunk: StreamCallback) => {
-  if (typeof onChunk !== 'function') return;
+    const response = await fetch('/api/ai/stream', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ message: currentMessage, provider }),
+    });
 
-  const tokens = text.split(/(\s+)/);
-  let buffer = '';
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Streaming failed');
+    }
 
-  for (const token of tokens) {
-    buffer += token;
-    onChunk(buffer);
-    await delay(20);
+    let fullResponse = '';
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error('No response body');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const data = JSON.parse(line.slice(6));
+            if (data.done) {
+              fullResponse = data.fullResponse;
+            } else if (data.chunk) {
+              fullResponse += data.chunk;
+              onChunk?.(data.chunk);
+            } else if (data.error) {
+              throw new Error(data.error);
+            }
+          } catch (e) {
+            // Ignore JSON parse errors for incomplete frames
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    return fullResponse;
+  } catch (error: any) {
+    console.error('Streaming error:', error);
+    return null;
   }
 };
 
@@ -22,9 +79,17 @@ const streamText = async (text: string, onChunk: StreamCallback) => {
  */
 const postJson = async <T>(endpoint: string, payload: unknown): Promise<T | null> => {
   try {
+    // Get auth token from storage
+    const token = localStorage.getItem('auth_token') || sessionStorage.getItem('auth_token');
+    
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify(payload),
     });
 
@@ -50,7 +115,17 @@ export const processChat = async (
     files,
   }).then((r) => r?.text ?? fallbackResponse).catch(() => fallbackResponse);
 
-  if (onChunk) await streamText(resultText, onChunk);
+  if (onChunk) {
+    // Simulate streaming for non-streaming response
+    const tokens = resultText.split(/(\s+)/);
+    let buffer = '';
+    for (const token of tokens) {
+      buffer += token;
+      onChunk(buffer);
+      await new Promise(resolve => setTimeout(resolve, 20));
+    }
+  }
+
   return resultText;
 };
 

@@ -109,6 +109,16 @@ CREATE INDEX idx_document_chunks_embedding ON document_chunks USING hnsw (embedd
 CREATE INDEX idx_documents_user_id ON documents(user_id);
 CREATE INDEX idx_document_chunks_document_id ON document_chunks(document_id);
 
+-- API Keys Table for user-managed API keys
+CREATE TABLE api_keys (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    token TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TIMESTAMP WITH TIME ZONE
+);
+
 -- Observability Indexes
 CREATE INDEX idx_audit_logs_user_id ON audit_logs(user_id);
 CREATE INDEX idx_audit_logs_action ON audit_logs(action);

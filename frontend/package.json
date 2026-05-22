@@ -6,13 +6,15 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "echo 'Frontend linting skipped (no linter configured)'"
   },
   "dependencies": {
-    "react": "latest",
-    "react-dom": "latest",
+    "@google/genai": "latest",
+    "framer-motion": "^12.39.0",
     "lucide-react": "latest",
-    "@google/genai": "latest"
+    "react": "latest",
+    "react-dom": "latest"
   },
   "devDependencies": {
     "@types/node": "latest",

@@ -2,12 +2,20 @@ import React, { useState } from 'react';
 import { Hexagon, X } from 'lucide-react';
 
 interface AuthModalProps {
-  onLogin: () => void;
+  onAuthenticate: (mode: 'login' | 'register', payload: { name?: string; email: string; password: string }) => void;
   onClose: () => void;
 }
 
-export const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
+export const AuthModal: React.FC<AuthModalProps> = ({ onAuthenticate, onClose }) => {
   const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    onAuthenticate(isLogin ? 'login' : 'register', { name: name.trim(), email: email.trim(), password });
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xl flex items-center justify-center z-50 p-4">
@@ -32,12 +40,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
           </p>
         </div>
 
-        <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); onLogin(); }}>
+        <form className="space-y-4" onSubmit={handleSubmit}>
           {!isLogin && (
             <div>
               <label className="block text-xs font-medium text-zinc-400 mb-1.5 ml-1">Name</label>
               <input 
                 type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
                 className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 focus:bg-black/60 transition-all"
                 placeholder="John Doe"
               />
@@ -47,6 +57,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
             <label className="block text-xs font-medium text-zinc-400 mb-1.5 ml-1">Email</label>
             <input 
               type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 focus:bg-black/60 transition-all"
               placeholder="name@example.com"
             />
@@ -55,6 +67,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onLogin, onClose }) => {
             <label className="block text-xs font-medium text-zinc-400 mb-1.5 ml-1">Password</label>
             <input 
               type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-zinc-100 focus:outline-none focus:border-zinc-500 focus:bg-black/60 transition-all"
               placeholder="••••••••"
             />

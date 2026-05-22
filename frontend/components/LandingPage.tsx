@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Hexagon, Sparkles, Shield, Zap, ChevronRight } from 'lucide-react';
 
 interface LandingPageProps {
@@ -45,13 +46,15 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth }) => {
           Your thoughts, perfectly augmented.
         </p>
         
-        <button 
+        <motion.button
           onClick={onOpenAuth}
+          whileHover={{ y: -2 }}
+          whileTap={{ scale: 0.98 }}
           className="group flex items-center gap-2 px-8 py-4 bg-zinc-100 text-zinc-950 hover:bg-white rounded-full text-base font-medium transition-all duration-300 shadow-[0_0_40px_rgba(255,255,255,0.1)] hover:shadow-[0_0_60px_rgba(255,255,255,0.2)]"
         >
           Begin Journey
           <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-        </button>
+        </motion.button>
 
         {/* Feature Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-24 w-full">
@@ -77,11 +80,16 @@ export const LandingPage: React.FC<LandingPageProps> = ({ onOpenAuth }) => {
 };
 
 const FeatureCard: React.FC<{ icon: React.ReactNode, title: string, description: string }> = ({ icon, title, description }) => (
-  <div className="flex flex-col items-center text-center p-6 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-sm hover:bg-white/[0.04] transition-colors">
+  <motion.div
+    whileHover={{ y: -6 }}
+    whileTap={{ scale: 0.995 }}
+    transition={{ duration: 0.2, ease: 'easeOut' }}
+    className="flex flex-col items-center text-center p-6 rounded-2xl bg-white/[0.02] border border-white/5 backdrop-blur-sm hover:bg-white/[0.04] transition-colors"
+  >
     <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center mb-4 text-zinc-200">
       {icon}
     </div>
     <h3 className="text-base font-medium text-zinc-200 mb-2">{title}</h3>
     <p className="text-sm text-zinc-500 leading-relaxed">{description}</p>
-  </div>
+  </motion.div>
 );

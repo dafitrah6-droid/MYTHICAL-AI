@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Sidebar } from './components/Sidebar';
 import { ChatInterface } from './components/ChatInterface';
 import { MemoryView } from './components/MemoryView';
@@ -28,14 +29,45 @@ export default function App() {
   // Lifted state for AI Memory Engine data flow
   const [memories, setMemories] = useState<MemoryItem[]>(INITIAL_MEMORIES);
 
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-    setUser(MOCK_USER);
-    setShowAuthModal(false);
-    setCurrentView('dashboard');
+  const handleAuthenticate = async (mode: 'login' | 'register', payload: { name?: string; email: string; password: string }) => {
+    try {
+      const endpoint = mode === 'register' ? '/api/auth/register' : '/api/auth/session';
+      const body = mode === 'register'
+        ? { name: payload.name, email: payload.email, password: payload.password }
+        : { email: payload.email, password: payload.password };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        console.error('Authentication failed:', errorPayload || response.statusText);
+        return;
+      }
+
+      const { token, user } = await response.json();
+      if (!token) {
+        console.error('Authentication failed: missing token');
+        return;
+      }
+
+      localStorage.setItem('auth_token', token);
+      setIsAuthenticated(true);
+      setUser(user ?? MOCK_USER);
+      setShowAuthModal(false);
+      setCurrentView('dashboard');
+    } catch (error) {
+      console.error('Authentication error:', error);
+    }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem('auth_token');
+    sessionStorage.removeItem('auth_token');
+
     setIsAuthenticated(false);
     setUser(null);
     setCurrentView('dashboard');
@@ -69,12 +101,22 @@ export default function App() {
     return (
       <>
         <LandingPage onOpenAuth={() => setShowAuthModal(true)} />
-        {showAuthModal && (
-          <AuthModal 
-            onLogin={handleLogin} 
-            onClose={() => setShowAuthModal(false)} 
-          />
-        )}
+        <AnimatePresence>
+          {showAuthModal && (
+            <motion.div
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -24 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+            >
+              <AuthModal 
+                onAuthenticate={handleAuthenticate} 
+                onClose={() => setShowAuthModal(false)} 
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </>
     );
   }
@@ -89,7 +131,18 @@ export default function App() {
       />
       
       <main className="flex-1 relative flex flex-col min-w-0">
-        {renderMainContent()}
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={currentView}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -18 }}
+            transition={{ duration: 0.32, ease: 'easeOut' }}
+            className="flex-1"
+          >
+            {renderMainContent()}
+          </motion.div>
+        </AnimatePresence>
       </main>
     </div>
   );

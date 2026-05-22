@@ -310,6 +310,90 @@ app.post('/api-proxy', async (req, res) => {
   }
 });
 
+// --- Application API Endpoints (mounted at /api/*) ---
+// Lightweight demo user and AI endpoints so frontend can call a single backend.
+const getUserIdFromRequestRoot = async (req) => {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith('Bearer ')) return null;
+  const token = auth.split(' ')[1];
+  // In this lightweight wiring we do not validate sessions against a DB here.
+  // Returning the token as a pseudo-user-id for demo purposes when present.
+  if (token && token.length > 0) return token;
+  return null;
+};
+
+app.get('/api/user/profile', async (req, res) => {
+  const userId = await getUserIdFromRequestRoot(req);
+  if (!userId) return res.json({ id: 'demo-user', name: 'Admin User', email: 'admin@mythical.ai' });
+  // Minimal profile echo for authenticated requests
+  return res.json({ id: userId, name: `User ${userId.slice(0,6)}`, email: `${userId.slice(0,6)}@example.local` });
+});
+
+app.put('/api/user/profile', async (req, res) => {
+  const userId = await getUserIdFromRequestRoot(req);
+  const { name, email } = req.body || {};
+  if (!name || !email) return res.status(400).json({ error: 'Missing name or email' });
+  if (!userId) return res.json({ id: 'demo-user', name, email });
+  return res.json({ id: userId, name, email });
+});
+
+app.get('/api/user/api-keys', async (req, res) => {
+  const userId = await getUserIdFromRequestRoot(req);
+  if (!userId) return res.json([]);
+  const demo = [
+    { id: 'local-1', name: 'Default key', maskedKey: '••••••••abcd12', createdAt: new Date().toISOString(), lastUsedAt: null },
+  ];
+  res.json(demo);
+});
+
+app.post('/api/user/api-keys', async (req, res) => {
+  const userId = await getUserIdFromRequestRoot(req);
+  if (!userId) {
+    const random = [...Array(48)].map(() => Math.random().toString(36).slice(2)).join('').slice(0, 48);
+    return res.status(201).json({ id: `local-${Date.now()}`, name: `Local API Key`, maskedKey: `${random.slice(0,4)}…${random.slice(-4)}`, value: random, createdAt: new Date().toISOString(), lastUsedAt: null });
+  }
+  const token = [...Array(48)].map(() => Math.random().toString(36).slice(2)).join('').slice(0,48);
+  res.status(201).json({ id: `key-${Date.now()}`, name: `Generated key`, maskedKey: `${token.slice(0,4)}…${token.slice(-4)}`, value: token, createdAt: new Date().toISOString(), lastUsedAt: null });
+});
+
+app.delete('/api/user/api-keys/:id', async (req, res) => {
+  // Accept and return 204 for demo deletion
+  res.status(204).send();
+});
+
+app.delete('/api/user/account', async (req, res) => {
+  // Demo mode: respond 204
+  res.status(204).send();
+});
+
+// AI endpoints (simple backend-backed responses)
+app.post('/api/ai/process', async (req, res) => {
+  const { currentMessage } = req.body || {};
+  const text = `Echo (root backend): ${currentMessage ?? 'no input'}\n\n[Lightweight response from root server].`;
+  res.json({ text });
+});
+
+app.post('/api/ai/memories', async (req, res) => {
+  const { text } = req.body || {};
+  const items = !text ? [] : text.split(/\.|,|;|\n/).slice(0,3).map((s) => ({ category: 'note', content: s.trim() })).filter((i) => i.content.length>0);
+  res.json(items);
+});
+
+app.post('/api/ai/plan', async (req, res) => {
+  const { objective } = req.body || {};
+  const plan = [
+    { title: 'Clarify objective', description: `Understand and break down: ${objective ?? 'unspecified'}` },
+    { title: 'Define steps', description: 'List the immediate next actions and owners.' },
+  ];
+  res.json(plan);
+});
+
+app.post('/api/ai/reason', async (req, res) => {
+  const { query } = req.body || {};
+  const text = `Reasoning result for: ${query ?? ''}`;
+  res.json({ text });
+});
+
 const server = app.listen(PORT, API_BACKEND_HOST, () => {
   console.log(`Vertex AI Backend listening at http://localhost:${PORT}`);
 });

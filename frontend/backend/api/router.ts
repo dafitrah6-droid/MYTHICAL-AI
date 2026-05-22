@@ -2,6 +2,8 @@ import express, { Request, Response } from 'express';
 import { AuthService } from '../services/auth.service';
 import { ChatService } from '../services/chat.service';
 import { MemoryService } from '../services/memory.service';
+import { UserService } from '../services/user.service';
+import { AiService } from '../services/ai.service';
 import { SecurityMiddleware, AuthenticatedRequest } from '../security/middleware';
 import { AccessPolicies } from '../security/policies';
 import { ObservabilityMiddleware } from './middleware/observability';
@@ -18,24 +20,48 @@ router.use(SecurityMiddleware.rateLimiter(100, 60));
 // --- Auth Endpoints ---
 
 // Stricter rate limit for auth endpoints (10 requests per minute)
-router.post('/auth/session', SecurityMiddleware.rateLimiter(10, 60), async (req: Request, res: Response) => {
-  const { userId } = req.body;
-  
-  if (!userId || typeof userId !== 'string') {
-    return res.status(400).json({ error: 'Bad Request: Invalid userId parameter' });
+router.post('/auth/register', SecurityMiddleware.rateLimiter(10, 60), async (req: Request, res: Response) => {
+  const { name, email, password } = req.body;
+  if (!name || typeof name !== 'string' || !email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: name, email and password are required' });
   }
-  
+
   try {
+    const user = await UserService.registerUser(name.trim(), email.trim(), password);
+    const token = await AuthService.createSession(user.id);
+    await EventTracker.trackUserActivity(user.id, 'register_success');
+    res.status(201).json({ token, user });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/auth/session', SecurityMiddleware.rateLimiter(10, 60), async (req: Request, res: Response) => {
+  const { email, password } = req.body;
+  if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    return res.status(400).json({ error: 'Bad Request: email and password are required' });
+  }
+
+  try {
+    const userId = await UserService.verifyCredentials(email.trim(), password);
+    if (!userId) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const user = await UserService.getUserProfile(userId);
     const token = await AuthService.createSession(userId);
     await EventTracker.trackUserActivity(userId, 'login_success');
-    res.status(201).json({ token });
+    res.status(201).json({ token, user });
   } catch (error: any) {
     res.status(400).json({ error: error.message });
   }
 });
 
 router.delete('/auth/session', SecurityMiddleware.requireAuth, async (req: AuthenticatedRequest, res: Response) => {
-  const token = req.headers.authorization!.split(' ')[1];
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return res.status(401).json({ error: 'No token provided' });
+  
+  const token = authHeader.split(' ')[1];
   try {
     await AuthService.revokeSession(token);
     await EventTracker.trackUserActivity(req.securityContext!.userId, 'logout');
@@ -82,7 +108,6 @@ router.post('/chat/messages', async (req: AuthenticatedRequest, res: Response) =
     return res.status(400).json({ error: 'Bad Request: Invalid conversationId parameter' });
   }
   
-  // Resource Ownership Check
   const canAccess = await AccessPolicies.canAccessConversation(req.securityContext!.userId, conversationId);
   if (!canAccess) {
     return res.status(403).json({ error: 'Forbidden: You do not have access to this conversation.' });
@@ -180,8 +205,170 @@ router.delete('/memory/:id', async (req: AuthenticatedRequest, res: Response) =>
   }
 });
 
-// --- Admin Endpoints Example ---
+// --- Admin Endpoints ---
 router.get('/admin/stats', SecurityMiddleware.requireAuth, SecurityMiddleware.requireRole(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   await EventTracker.trackUserActivity(req.securityContext!.userId, 'view_admin_stats');
   res.json({ status: 'Admin access granted', stats: {} });
+});
+
+// --- User Profile & API Key Management ---
+router.use('/user', SecurityMiddleware.requireAuth, SecurityMiddleware.sanitizeAndValidateInput);
+
+router.get('/user/profile', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const profile = await UserService.getUserProfile(req.securityContext!.userId);
+    res.json(profile);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.put('/user/profile', async (req: AuthenticatedRequest, res: Response) => {
+  const { name, email } = req.body;
+  if (!name || !email) return res.status(400).json({ error: 'Missing name or email' });
+
+  try {
+    const updated = await UserService.updateUserProfile(req.securityContext!.userId, name, email);
+    res.json(updated);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.get('/user/api-keys', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const keys = await UserService.getUserApiKeys(req.securityContext!.userId);
+    res.json(keys);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/user/api-keys', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const key = await UserService.createApiKey(req.securityContext!.userId);
+    res.status(201).json(key);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/user/api-keys/:id', async (req: AuthenticatedRequest, res: Response) => {
+  const keyId = req.params.id;
+  try {
+    await UserService.revokeApiKey(req.securityContext!.userId, keyId);
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.delete('/user/account', async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    await UserService.deleteAccount(req.securityContext!.userId);
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'delete_account');
+    res.status(204).send();
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// --- AI Streaming Endpoints ---
+
+router.use('/ai', SecurityMiddleware.requireAuth);
+
+router.post('/ai/stream', async (req: AuthenticatedRequest, res: Response) => {
+  const { message, provider = 'gemini' } = req.body;
+
+  if (!message || typeof message !== 'string' || message.trim() === '') {
+    return res.status(400).json({ error: 'Bad Request: message is required' });
+  }
+
+  if (!['gemini', 'claude', 'gpt'].includes(provider)) {
+    return res.status(400).json({ error: 'Bad Request: invalid provider' });
+  }
+
+  try {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    let fullResponse = '';
+
+    await AiService.processStream(
+      req.securityContext!.userId,
+      message.trim(),
+      provider,
+      (chunk: string) => {
+        fullResponse += chunk;
+        res.write(`data: ${JSON.stringify({ chunk, provider })}\n\n`);
+      }
+    );
+
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'ai_interaction', { provider });
+    res.write(`data: ${JSON.stringify({ done: true, fullResponse })}\n\n`);
+    res.end();
+  } catch (error: any) {
+    console.error('[API] AI streaming error:', error);
+    res.write(`data: ${JSON.stringify({ error: error.message, provider })}\n\n`);
+    res.end();
+  }
+});
+
+router.post('/ai/process', async (req: AuthenticatedRequest, res: Response) => {
+  const { message, provider = 'gemini' } = req.body;
+
+  if (!message || typeof message !== 'string' || message.trim() === '') {
+    return res.status(400).json({ error: 'Bad Request: message is required' });
+  }
+
+  try {
+    let fullResponse = '';
+    await AiService.processStream(
+      req.securityContext!.userId,
+      message.trim(),
+      provider,
+      (chunk: string) => { fullResponse += chunk; }
+    );
+
+    await EventTracker.trackUserActivity(req.securityContext!.userId, 'ai_interaction', { provider });
+    res.json({ text: fullResponse, provider });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message, provider });
+  }
+});
+
+router.post('/ai/memories', async (req: AuthenticatedRequest, res: Response) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text is required' });
+  try {
+    const items = text.split(/\.|,|;|\n/).slice(0, 3).map((s: string) => ({ category: 'note', content: s.trim() })).filter((i: any) => i.content.length > 0);
+    res.json(items);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/ai/plan', async (req: AuthenticatedRequest, res: Response) => {
+  const { objective } = req.body;
+  if (!objective) return res.status(400).json({ error: 'objective is required' });
+  try {
+    const plan = [
+      { title: 'Clarify objective', description: `Analyze: ${objective}` },
+      { title: 'Define steps', description: 'Immediate next actions.' },
+    ];
+    res.json(plan);
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/ai/reason', async (req: AuthenticatedRequest, res: Response) => {
+  const { query } = req.body;
+  if (!query) return res.status(400).json({ error: 'query is required' });
+  try {
+    res.json({ text: `Reasoning result for: ${query}` });
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
 });

@@ -64,12 +64,20 @@ export class SecurityMiddleware {
       }
 
       // Fetch user role to build full security context
-      const userResult = await pool.query('SELECT role FROM users WHERE id = $1', [userId]);
-      if (userResult.rows.length === 0) {
-        return res.status(401).json({ error: 'Unauthorized: User no longer exists' });
+      let role: UserRole = 'standard_user';
+      try {
+        const userResult = await pool.query('SELECT * FROM users WHERE id = $1', [userId]);
+        if (userResult.rows.length === 0) {
+          return res.status(401).json({ error: 'Unauthorized: User no longer exists' });
+        }
+
+        role = (userResult.rows[0].role as UserRole) || 'standard_user';
+      } catch (queryError) {
+        // Some databases may not have a role column; fall back to standard user role
+        console.warn('User role lookup fallback:', queryError);
+        role = 'standard_user';
       }
 
-      const role = userResult.rows[0].role as UserRole;
       const permissions = AccessPolicies.getPermissionsForRole(role);
 
       req.securityContext = {

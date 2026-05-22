@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { MessageSquare, BrainCircuit, Settings, LogOut, Plus, Hexagon, LayoutDashboard } from 'lucide-react';
 import { AppView, User } from '../types';
 
@@ -20,10 +21,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, onViewChange, use
 
       {/* New Chat Action */}
       <div className="p-4">
-        <button className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/5 text-zinc-100 transition-all py-2.5 rounded-xl text-sm font-medium shadow-lg">
+        <motion.button
+          whileHover={{ scale: 1.01 }}
+          whileTap={{ scale: 0.98 }}
+          className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/5 text-zinc-100 transition-all py-2.5 rounded-xl text-sm font-medium shadow-lg"
+        >
           <Plus className="w-4 h-4" />
           New Thread
-        </button>
+        </motion.button>
       </div>
 
       {/* Navigation */}
@@ -88,8 +93,11 @@ interface NavItemProps {
 
 const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => {
   return (
-    <button
+    <motion.button
       onClick={onClick}
+      whileHover={{ x: 2 }}
+      whileTap={{ scale: 0.98 }}
+      transition={{ duration: 0.18 }}
       className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm transition-all ${
         isActive 
           ? 'bg-white/10 text-zinc-100 font-medium border border-white/5 shadow-sm' 
@@ -98,6 +106,6 @@ const NavItem: React.FC<NavItemProps> = ({ icon, label, isActive, onClick }) => 
     >
       {icon}
       {label}
-    </button>
+    </motion.button>
   );
 };
